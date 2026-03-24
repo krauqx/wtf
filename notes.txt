@@ -1,0 +1,6 @@
+//For checking login session
+if (isset($_SESSION['user_id'])) {
+    header('Location: ' . URL_DASH_PHYSICIAN);
+    exit();
+}
+?>

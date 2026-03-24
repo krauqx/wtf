@@ -1,0 +1,378 @@
+
+-- User Query
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    contact VARCHAR(20) NOT NULL, -- Mobile number in E.164 format (e.g., 639xxxxxxx)
+    password VARCHAR(255) NOT NULL,
+    role ENUM('patient','staff','admin') NOT NULL,
+    date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    date_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+ALTER TABLE users MODIFY role ENUM('patient', 'staff', 'admin', 'midwife', 'clerk') NOT NULL;
+
+-- Patient Records
+CREATE TABLE patient_records (
+    patient_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    first_name VARCHAR(50) NOT NULL,
+    middle_name VARCHAR(50),
+    last_name VARCHAR(50) NOT NULL,
+    date_of_birth DATE,
+    age INT,
+    gender ENUM('Male','Female','Other') DEFAULT NULL,
+    status ENUM('Single','Married','Widowed','Separated') DEFAULT NULL,
+    contact_number VARCHAR(20),
+    occupation VARCHAR(100),
+    address VARCHAR(255),
+    patient_image VARCHAR(255), -- store filename or relative path to image
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_patient_user
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
+
+ALTER TABLE patient_records
+  ADD COLUMN emergency_name VARCHAR(100) NULL,
+  ADD COLUMN emergency_contact VARCHAR(20) NULL,
+  ADD COLUMN emergency_address VARCHAR(255) NULL,
+  ADD COLUMN relationship VARCHAR(50) NULL;
+
+
+-- OTP table
+CREATE TABLE otp_requests (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+
+  contact VARCHAR(50) NOT NULL,                  -- Mobile number or email (pre-registration)
+  otp_code VARCHAR(6) NOT NULL,                  -- 6-digit OTP
+  channel ENUM('sms', 'email') DEFAULT 'sms',    -- Delivery method
+  purpose ENUM('register', 'verify') DEFAULT 'register', -- OTP use case
+
+  status ENUM('pending', 'used', 'expired') DEFAULT 'pending',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME DEFAULT NULL,
+
+  ip_address VARCHAR(45) DEFAULT NULL,           -- Optional: for fraud tracking
+  delivery_status ENUM('sent', 'failed') DEFAULT NULL, -- Optional: SMS API feedback
+
+  INDEX idx_contact_status (contact, status),
+  INDEX idx_expiry (expires_at),
+  INDEX idx_created (created_at)
+);
+
+-- Auto Delete Event
+CREATE EVENT delete_expired_otps
+ON SCHEDULE EVERY 10 MINUTE
+DO
+  DELETE FROM otp_requests
+  WHERE status = 'pending' AND expires_at < NOW();
+
+
+-- Patient Exam patient_records
+CREATE TABLE physical_examination_record (
+    record_id INT AUTO_INCREMENT PRIMARY KEY,
+    patient_id INT NOT NULL,
+    staff_id INT NOT NULL,  -- NEW: links to staff table
+    exam_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    doctor_note TEXT,
+
+    -- Conjunctiva
+    conjunctiva_pale BOOLEAN DEFAULT FALSE,
+    conjunctiva_yellowish BOOLEAN DEFAULT FALSE,
+
+    -- Neck
+    neck_enlarged_thyroid BOOLEAN DEFAULT FALSE,
+    neck_enlarged_lymph_nodes BOOLEAN DEFAULT FALSE,
+
+    -- Breast (Left)
+    breast_left_mass BOOLEAN DEFAULT FALSE,
+    breast_left_nipple_discharge BOOLEAN DEFAULT FALSE,
+    breast_left_skin_dimpling BOOLEAN DEFAULT FALSE,
+    breast_left_axillary_nodes BOOLEAN DEFAULT FALSE,
+
+    -- Breast (Right)
+    breast_right_mass BOOLEAN DEFAULT FALSE,
+    breast_right_nipple_discharge BOOLEAN DEFAULT FALSE,
+    breast_right_skin_dimpling BOOLEAN DEFAULT FALSE,
+    breast_right_axillary_nodes BOOLEAN DEFAULT FALSE,
+
+    -- Thorax
+    thorax_abnormal_heart_sounds BOOLEAN DEFAULT FALSE,
+    thorax_abnormal_breath_sounds BOOLEAN DEFAULT FALSE,
+
+    -- Abdomen
+    abdomen_enlarged_liver BOOLEAN DEFAULT FALSE,
+    abdomen_mass BOOLEAN DEFAULT FALSE,
+    abdomen_tenderness BOOLEAN DEFAULT FALSE,
+
+    -- Extremities
+    extremities_edema BOOLEAN DEFAULT FALSE,
+    extremities_varicosities BOOLEAN DEFAULT FALSE,
+
+    -- Perineum
+    perineum_scars BOOLEAN DEFAULT FALSE,
+    perineum_warts BOOLEAN DEFAULT FALSE,
+    perineum_reddish BOOLEAN DEFAULT FALSE,
+    perineum_lacerations BOOLEAN DEFAULT FALSE,
+
+    -- Vagina
+    vagina_congested BOOLEAN DEFAULT FALSE,
+    vagina_bartholins_cyst BOOLEAN DEFAULT FALSE,
+    vagina_warts BOOLEAN DEFAULT FALSE,
+    vagina_skenes_discharge BOOLEAN DEFAULT FALSE,
+    vagina_rectocele BOOLEAN DEFAULT FALSE,
+    vagina_cystocele BOOLEAN DEFAULT FALSE,
+
+    -- Cervix
+    cervix_congested BOOLEAN DEFAULT FALSE,
+    cervix_erosion BOOLEAN DEFAULT FALSE,
+    cervix_consistency ENUM('Soft','Firm') DEFAULT NULL,
+
+    -- Uterus
+    uterus_position ENUM('Mid','Anteflexed','Retroflexed') DEFAULT NULL,
+    uterus_size ENUM('Small','Normal','Large') DEFAULT NULL,
+
+    -- Adnexa
+    adnexa_mass BOOLEAN DEFAULT FALSE,
+    adnexa_tenderness BOOLEAN DEFAULT FALSE,
+
+    -- Uterine Depth
+    uterine_depth_cm DECIMAL(4,1) DEFAULT NULL,
+
+    -- Metadata
+    examiner VARCHAR(100),  -- Optional legacy field
+
+
+    CONSTRAINT fk_physical_exam_patient
+        FOREIGN KEY (patient_id) REFERENCES patient_records(patient_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+
+);
+
+
+-- Visit Analytics Section
+
+CREATE TABLE visit_analytics (
+    visit_id INT AUTO_INCREMENT PRIMARY KEY,
+    patient_id INT NOT NULL,
+    staff_id INT NOT NULL,  
+    visit_date DATE NOT NULL,
+
+    blood_pressure VARCHAR(15),
+    temperature DECIMAL(5,2),
+    weight DECIMAL(5,2),
+    fundal_height DECIMAL(5,2),
+    fetal_heart_tone INT,
+    fetal_position VARCHAR(50),
+    chief_complaint TEXT,
+    doctor_note TEXT,  
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_visit_patient
+        FOREIGN KEY (patient_id) REFERENCES patient_records(patient_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+
+);
+
+
+
+CREATE TABLE vaw_risk_assessment (
+    assessment_id INT AUTO_INCREMENT PRIMARY KEY,
+    patient_id INT NOT NULL,
+    staff_id INT NOT NULL,  -- NEW: links to staff who recorded the entry
+    visit_date DATE NOT NULL,
+
+    -- Risk Indicators with Notes
+    history_domestic_violence BOOLEAN DEFAULT 0,
+    note_history_domestic_violence TEXT,
+
+    unpleasant_relationship BOOLEAN DEFAULT 0,
+    note_unpleasant_relationship TEXT,
+
+    partner_disapproves_visit BOOLEAN DEFAULT 0,
+    note_partner_disapproves_visit TEXT,
+
+    partner_disagrees_fp BOOLEAN DEFAULT 0,
+    note_partner_disagrees_fp TEXT,
+
+    -- Referral Options (only 'Others' has a note)
+    referred_to_dswd BOOLEAN DEFAULT 0,
+    referred_to_wcpu BOOLEAN DEFAULT 0,
+    referred_to_ngos BOOLEAN DEFAULT 0,
+    referred_to_others BOOLEAN DEFAULT 0,
+    other_referral_note TEXT,
+
+    doctor_note TEXT,  -- NEW: general summary or remarks
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_vaw_patient FOREIGN KEY (patient_id)
+        REFERENCES patient_records(patient_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
+
+-- Medical History
+CREATE TABLE medical_history (
+    history_id INT AUTO_INCREMENT PRIMARY KEY,
+    patient_id INT NOT NULL,
+    staff_id INT NOT NULL,  -- NEW: links to staff who recorded the entry
+    visit_date DATE NOT NULL,
+
+    -- HEENT
+    epilepsy_seizure BOOLEAN DEFAULT 0,
+    epilepsy_notes TEXT,
+    severe_headache_dizziness BOOLEAN DEFAULT 0,
+    headache_notes TEXT,
+    visual_disturbance BOOLEAN DEFAULT 0,
+    vision_notes TEXT,
+    yellowish_conjunctivitis BOOLEAN DEFAULT 0,
+    conjunctivitis_notes TEXT,
+    enlarged_thyroid BOOLEAN DEFAULT 0,
+    thyroid_notes TEXT,
+
+    -- CHEST/HEART
+    severe_chest_pain BOOLEAN DEFAULT 0,
+    chest_pain_notes TEXT,
+    shortness_of_breath BOOLEAN DEFAULT 0,
+    shortness_breath_notes TEXT,
+    breast_axillary_masses BOOLEAN DEFAULT 0,
+    breast_mass_notes TEXT,
+    nipple_discharge BOOLEAN DEFAULT 0,
+    nipple_discharge_notes TEXT,
+    systolic_140_above BOOLEAN DEFAULT 0,
+    systolic_notes TEXT,
+    diastolic_90_above BOOLEAN DEFAULT 0,
+    diastolic_notes TEXT,
+    history_cva BOOLEAN DEFAULT 0,
+    family_history_notes TEXT,
+
+    -- ABDOMEN
+    abdominal_mass BOOLEAN DEFAULT 0,
+    abdomen_mass_notes TEXT,
+    history_gallbladder_disease BOOLEAN DEFAULT 0,
+    gallbladder_notes TEXT,
+    history_liver_disease BOOLEAN DEFAULT 0,
+    liver_notes TEXT,
+
+    -- GENITAL
+    uterine_mass BOOLEAN DEFAULT 0,
+    uterine_mass_notes TEXT,
+    vaginal_discharge BOOLEAN DEFAULT 0,
+    vaginal_discharge_notes TEXT,
+    intermenstrual_bleeding BOOLEAN DEFAULT 0,
+    intermenstrual_bleeding_notes TEXT,
+    postcoital_bleeding BOOLEAN DEFAULT 0,
+    postcoital_bleeding_notes TEXT,
+
+    -- EXTREMITIES
+    severe_varicosities BOOLEAN DEFAULT 0,
+    varicosities_notes TEXT,
+    leg_swelling_pain BOOLEAN DEFAULT 0,
+    leg_pain_notes TEXT,
+
+    -- SKIN
+    yellowish_skin BOOLEAN DEFAULT 0,
+    yellowish_skin_notes TEXT,
+
+    -- HISTORY OF THE FOLLOWING
+    history_smoking BOOLEAN DEFAULT 0,
+    smoking_notes TEXT,
+    history_allergies BOOLEAN DEFAULT 0,
+    allergies_notes TEXT,
+    history_drug_intake BOOLEAN DEFAULT 0,
+    drug_intake_notes TEXT,
+    history_std BOOLEAN DEFAULT 0,
+    std_notes TEXT,
+    history_multiple_partners BOOLEAN DEFAULT 0,
+    multiple_partners_notes TEXT,
+    bleeding_tendencies BOOLEAN DEFAULT 0,
+    bleeding_tendencies_notes TEXT,
+    history_anemia BOOLEAN DEFAULT 0,
+    anemia_notes TEXT,
+    history_diabetes BOOLEAN DEFAULT 0,
+    diabetes_notes TEXT,
+
+    -- STI RISKS
+    sti_multiple_partners BOOLEAN DEFAULT 0,
+    sti_multiple_partners_notes TEXT,
+    sti_women_discharge BOOLEAN DEFAULT 0,
+    sti_women_discharge_notes TEXT,
+    sti_women_itching_sores BOOLEAN DEFAULT 0,
+    sti_women_itching_notes TEXT,
+    sti_women_pain_burning BOOLEAN DEFAULT 0,
+    sti_women_pain_notes TEXT,
+    sti_women_treated_sti BOOLEAN DEFAULT 0,
+    sti_women_treated_notes TEXT,
+    sti_men_pain_burning BOOLEAN DEFAULT 0,
+    sti_men_pain_notes TEXT,
+    sti_men_open_sores BOOLEAN DEFAULT 0,
+    sti_men_sores_notes TEXT,
+    sti_men_pus_penis BOOLEAN DEFAULT 0,
+    sti_men_pus_notes TEXT,
+    sti_men_swollen_genitals BOOLEAN DEFAULT 0,
+    sti_men_swollen_notes TEXT,
+    sti_men_treated_sti BOOLEAN DEFAULT 0,
+    sti_men_treated_notes TEXT,
+
+    doctor_note TEXT,  -- NEW: general summary or remarks
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_medical_history_patient
+        FOREIGN KEY (patient_id) REFERENCES patient_records(patient_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+
+  );
+
+-- Obstetrical History
+CREATE TABLE obstetrical_history (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  patient_id INT NOT NULL,
+  staff_id INT NOT NULL,  -- NEW: links to staff who recorded the entry
+  visit_date DATE NOT NULL,
+
+  -- Number of Pregnancies
+  full_term INT DEFAULT 0,
+  premature INT DEFAULT 0,
+  abortions INT DEFAULT 0,
+  living_children INT DEFAULT 0,
+
+  -- Additional Info
+  last_delivery_date DATE DEFAULT NULL,
+  last_delivery_type VARCHAR(50) DEFAULT NULL,
+  past_menstrual_period DATE DEFAULT NULL,
+  menstrual_character TEXT DEFAULT NULL,
+
+  -- History of the Following (Boolean + Notes)
+  hydatidiform_mole BOOLEAN DEFAULT 0,
+  hydatidiform_mole_notes TEXT DEFAULT NULL,
+
+  ectopic_pregnancy BOOLEAN DEFAULT 0,
+  ectopic_pregnancy_notes TEXT DEFAULT NULL,
+
+  doctor_note TEXT,  -- NEW: general summary or remarks
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_obstetrical_history_patient
+    FOREIGN KEY (patient_id) REFERENCES patient_records(patient_id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+
+  );

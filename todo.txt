@@ -1,0 +1,9 @@
+Add columns for user table:
+-created(date), updated(date),
+
+Add a authenticator for accessing some pages
+
+Make sure to remember synch error in Medical 
+Dashboard. Find a way to bypass by using
+ alternatives like AJAX or reloading the page
+ with a new url or id (dashboard.php?id=1)

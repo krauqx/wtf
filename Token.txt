@@ -1,0 +1,42 @@
+// Mocean
+Name = "JAM LyingIn"
+Token = "apit-ucZ1UL8w3I0426gDFYjpnnaWlTgTFetX-giO1R"
+API Post = "https://rest.moceanapi.com/rest/2/sms"
+
+<?php
+// 🔧 STEP 1: Setup your credentials and message details
+$token = "apit-ucZ1UL8w3I0426gDFYjpnnaWlTgTFetX-giO1R";     // Your MoceanAPI token
+$recipient = "639949880737";                              // Recipient's mobile number (PH format)
+$message = "Hello from JAM LyingIn!";                     // Message content
+$sender_name = "JAM LyingIn";                             // Sender name (alphanumeric, max 11 chars)
+
+// 📦 STEP 2: Prepare the data payload
+$data = array(
+    'mocean-to' => $recipient,        // Destination number
+    'mocean-from' => $sender_name,    // Sender name shown to recipient
+    'mocean-text' => $message         // Message body
+);
+
+// 🚀 STEP 3: Initialize cURL and send the request
+$ch = curl_init("https://rest.moceanapi.com/rest/2/sms"); // MoceanAPI SMS endpoint
+curl_setopt($ch, CURLOPT_POST, true);                     // Use POST method
+curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data)); // Encode payload
+curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+    "Authorization: Bearer $token",                       // Use Bearer token for auth
+    "Content-Type: application/x-www-form-urlencoded"     // Form-encoded payload
+));
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);           // Return response as string
+$response = curl_exec($ch);                               // Execute the request
+curl_close($ch);                                          // Close the connection
+
+// 📬 STEP 4: Output the response
+echo "MoceanAPI Response: " . $response;                  // Display API response
+?>
+
+
+//CloudSMS
+
+Name = "CLOUDSMS"
+App Key = "5EF8F05657D144EC9D2371EDE216568A"
+App Secret = "bZ2ltEu1dUcVf1dK8d3FG8WenvBVdIATTfZLyOMd"
+API Path = "https://api.cloudsms.io/v1/messages"
